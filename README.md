@@ -17,11 +17,15 @@ The game is currently in production
 
 or
 
-* Open Terminal:
+* Open Project:
   
-1. ``` cd game ```
+1. Open Terminal
 
-2. ``` py main.py ```
+2. ``` .venv\Scripts\activate ```
+  
+3. ``` cd game ```
+
+4. ``` py main.py ```
 
 ### Help
 The game is currently in production. 
