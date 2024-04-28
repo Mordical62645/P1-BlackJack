@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=D:\Documents\TASKS\PORTFOLIO\1-Game Development\Python\Projects\Pygame\P1_BlackJack\.venv
+set VIRTUAL_ENV=C:\Users\ptecs\OneDrive\Documents\PORTFOLIO\1-Game Development\Python\Projects\Pygame\P1_Blackjack\.venv
 
 if not defined PROMPT set PROMPT=$P$G
 
