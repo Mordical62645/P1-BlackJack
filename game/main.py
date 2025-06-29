@@ -150,7 +150,7 @@ def deal_initial_cards_animated(deck):
     dealer_hand = []
     playerscore = []
     dealerscore = []
-
+    
     # Animation target positions
     player_positions = [(250, 250), (350, 250)]
     dealer_positions = [(250, 50), (350, 50)]
@@ -219,8 +219,8 @@ def deal_initial_cards_animated(deck):
         pygame.display.flip()
         pygame.time.delay(100)  # Small pause for clarity
 
-    playertotal = sum(playerscore)
-    dealertotal = sum(dealerscore)
+    playertotal = sum(playerscore) 
+    dealertotal = sum(dealerscore) 
 
 ##### ACTION FUNCTIONS #####
 def Hit_func(dealertotal, playertotal):
@@ -297,16 +297,28 @@ def Hit_func(dealertotal, playertotal):
 def Stand_func(dealertotal, playertotal):    
     global deckcount, dealer_card_targetx
     
-    # Show dealer's hidden card
+    # Reveal dealer's hidden card
     for i, card in enumerate(dealer_hand):
-        card.load_image() 
+        card.load_image()
         screen.blit(card.cardimage, (250 + i * 100, 50))
-    
+    for i, card in enumerate(player_hand):
+        card.load_image()
+        screen.blit(card.cardimage, (250 + i * 100, 250))
     pygame.display.flip()
     pygame.time.delay(1000)
     
     # Dealer plays
     dealertotal, playertotal = dealer_dealing_cards(dealertotal, playertotal)
+
+    # Reveal all dealer and player cards again (in case more were drawn)
+    for i, card in enumerate(dealer_hand):
+        card.load_image()
+        screen.blit(card.cardimage, (250 + i * 100, 50))
+    for i, card in enumerate(player_hand):
+        card.load_image()
+        screen.blit(card.cardimage, (250 + i * 100, 250))
+    pygame.display.flip()
+    pygame.time.delay(500)
     
     # Determine winner
     if dealertotal > 21:
@@ -328,6 +340,9 @@ def Stand_func(dealertotal, playertotal):
     
     pygame.display.flip()
     pygame.time.delay(3000)
+    
+    # Animate discard all
+    animate_discard_all()
     
     return dealertotal, playertotal
 
@@ -401,6 +416,56 @@ def first_deal_anim():
         fps.tick(60)
     
     print("Initial deal complete!")
+
+# Add global discard pile and position
+discard_pile = []
+DISCARD_POS = (700, 20)  # Top right corner
+has_discarded_once = False
+
+def animate_discard_all():
+    global has_discarded_once
+    # Gather all cards to move (player + dealer)
+    cards_to_discard = []
+    positions = []
+    for i, c in enumerate(player_hand):
+        c.load_image()
+        cards_to_discard.append(c)
+        positions.append((250 + i * 100, 250))
+    for i, c in enumerate(dealer_hand):
+        c.load_image()
+        cards_to_discard.append(c)
+        positions.append((250 + i * 100, 50))
+
+    # Animate all cards moving to DISCARD_POS at once
+    frames = 30
+    for frame in range(frames):
+        t = frame / (frames - 1)
+        screen.blit(ground, (0, 0))
+        screen.blit(card_deck, (10, 10))
+        if has_discarded_once or frame == frames - 1:
+            screen.blit(card_deck, DISCARD_POS)
+        # Draw all cards in transit
+        for card, start_pos in zip(cards_to_discard, positions):
+            x = start_pos[0] + (DISCARD_POS[0] - start_pos[0]) * t
+            y = start_pos[1] + (DISCARD_POS[1] - start_pos[1]) * t
+            screen.blit(card.cardimage, (x, y))
+        pygame.display.flip()
+        fps.tick(60)
+
+    # After animation, add to discard pile and clear hands
+    discard_pile.extend(cards_to_discard)
+    player_hand.clear()
+    dealer_hand.clear()
+    playerscore.clear()
+    dealerscore.clear()
+    has_discarded_once = True
+    print(f"Discard pile count: {len(discard_pile)}")
+    print(f"Discard pile cards: {[str(card) for card in discard_pile]}")
+    print(f"Discard pile values: {[card.cardvalue for card in discard_pile]}")
+
+    # Automatically deal a new round if enough cards left
+    if deckcount >= 10:  # or another threshold if you want
+        deal_initial_cards_animated(deck)
 
 ##### BETTING #####
 def bet_start():
@@ -566,6 +631,10 @@ def game_start():
 
             if i == 1:
                 screen.blit(blind_card, (250, 50))
+        
+        # Draw discard pile holder and count
+        if has_discarded_once:
+            screen.blit(card_deck, DISCARD_POS)
 
         # Update everything
         action_manager.update(1 / 60.0)
