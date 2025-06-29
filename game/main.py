@@ -150,6 +150,9 @@ def dealer_dealing_cards(dealertotal, playertotal):
     
 def deal_initial_cards_animated(deck):
     global player_hand, dealer_hand, playerscore, dealerscore, playertotal, dealertotal, deckvalues, deckcount, blind_card
+    global dealer_card_targetx, hit_targetx
+    dealer_card_targetx = 250
+    hit_targetx = 250
 
     player_hand = []
     dealer_hand = []
@@ -707,12 +710,12 @@ def main():
 
     global fps, titlecard
     fps = pygame.time.Clock()
-    titlecard = pygame.font.Font("font/KarenFat.ttf", 50)
+    titlecard = get_scaled_font(0.08)
+    titlecard_surface = titlecard.render("BlackJack", True, "Black")
 
     # Pre-load images using cache
-    global ground, titlecard_surface, card_deck, card_deckpileblank
+    global ground, card_deck, card_deckpileblank
     ground = image_cache.get_image("graphics/ground.jpg")
-    titlecard_surface = titlecard.render("BlackJack", False, "Black")
     card_deck = image_cache.get_image("graphics/Card_Deck/card_deck.png")
     card_deckpileblank = image_cache.get_image("graphics/Card_Deck/card_deckpileblank.png")
 
@@ -769,6 +772,20 @@ def main():
 
         pygame.display.flip()
         fps.tick(60)
+
+def get_scaled_font(size_ratio=0.05):
+    size = int(screen.get_height() * size_ratio)
+    return pygame.font.Font("font/KarenFat.ttf", size)
+
+def render_text_fit(text, max_width, max_height):
+    size_ratio = 0.08
+    while size_ratio > 0.02:
+        font = get_scaled_font(size_ratio)
+        surface = font.render(text, True, "Black")
+        if surface.get_width() <= max_width and surface.get_height() <= max_height:
+            return surface
+        size_ratio -= 0.01
+    return font.render(text, True, "Black")
 
 if __name__ == "__main__":
     main()
