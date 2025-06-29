@@ -218,6 +218,9 @@ def deal_initial_cards_animated(deck):
             dealer_hand.append(card)
             dealerscore.append(value)
 
+        # Play sound when blitting the card face after animation
+        channel1.play(sound1)
+
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
         screen.blit(card_deckpileblank, DISCARD_POS)
@@ -320,6 +323,8 @@ def Stand_func(dealertotal, playertotal):
     for i, card in enumerate(dealer_hand):
         card.load_image()
         screen.blit(card.cardimage, (250 + i * 100, 50))
+        if i == 0:
+            channel1.play(sound1)  # Play sound when revealing the hidden dealer card
     for i, card in enumerate(player_hand):
         card.load_image()
         screen.blit(card.cardimage, (250 + i * 100, 250))
