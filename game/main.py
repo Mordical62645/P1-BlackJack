@@ -106,12 +106,17 @@ def dealer_dealing_cards(dealertotal, playertotal):
             current_time = pygame.time.get_ticks()
             
             while not animation.completed:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
                 current_time = pygame.time.get_ticks()
                 pos = animation.get_position(current_time)
                 
                 # Draw background
                 screen.blit(ground, (0, 0))
                 screen.blit(card_deck, (10, 10))
+                screen.blit(card_deckpileblank, DISCARD_POS)
                 
                 # Draw existing dealer cards
                 for i, card in enumerate(dealer_hand[:-1]):
@@ -176,10 +181,15 @@ def deal_initial_cards_animated(deck):
         animation = CardAnimation((10, 10), pos, 0.4)
         channel1.play(sound1)
         while not animation.completed:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
             current_time = pygame.time.get_ticks()
             anim_pos = animation.get_position(current_time)
             screen.blit(ground, (0, 0))
             screen.blit(card_deck, (10, 10))
+            screen.blit(card_deckpileblank, DISCARD_POS)
             # Draw all cards already dealt (not including the one being animated)
             # For player
             for i in range(len(player_hand)):
@@ -207,6 +217,7 @@ def deal_initial_cards_animated(deck):
 
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
+        screen.blit(card_deckpileblank, DISCARD_POS)
         for i, c in enumerate(player_hand):
             c.load_image()
             screen.blit(c.cardimage, player_positions[i])
@@ -244,12 +255,17 @@ def Hit_func(dealertotal, playertotal):
     current_time = pygame.time.get_ticks()
     
     while not animation.completed:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
         current_time = pygame.time.get_ticks()
         pos = animation.get_position(current_time)
 
         # Draw background
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
+        screen.blit(card_deckpileblank, DISCARD_POS)
         
         # Draw dealer cards
         for i, card in enumerate(dealer_hand):
@@ -395,11 +411,16 @@ def first_deal_anim():
     completed = [False] * len(animations)
     
     while not all(completed):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
         current_time = pygame.time.get_ticks()
         
         # Draw background
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
+        screen.blit(card_deckpileblank, DISCARD_POS)
         
         # Update and draw each animation
         for i, animation in enumerate(animations):
@@ -421,9 +442,14 @@ def first_deal_anim():
 discard_pile = []
 DISCARD_POS = (700, 20)  # Top right corner
 has_discarded_once = False
+has_discarded_once_already = False
+
+# Add global flag for discard animation
+in_discard_animation = False
 
 def animate_discard_all():
-    global has_discarded_once
+    global has_discarded_once, in_discard_animation, has_discarded_once_already
+    in_discard_animation = True
     # Gather all cards to move (player + dealer)
     cards_to_discard = []
     positions = []
@@ -439,11 +465,14 @@ def animate_discard_all():
     # Animate all cards moving to DISCARD_POS at once
     frames = 30
     for frame in range(frames):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
         t = frame / (frames - 1)
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
-        if has_discarded_once or frame == frames - 1:
-            screen.blit(card_deck, DISCARD_POS)
+        screen.blit(card_deckpileblank, DISCARD_POS)
         # Draw all cards in transit
         for card, start_pos in zip(cards_to_discard, positions):
             x = start_pos[0] + (DISCARD_POS[0] - start_pos[0]) * t
@@ -459,12 +488,15 @@ def animate_discard_all():
     playerscore.clear()
     dealerscore.clear()
     has_discarded_once = True
+    has_discarded_once_already = True
+    in_discard_animation = False
     print(f"Discard pile count: {len(discard_pile)}")
     print(f"Discard pile cards: {[str(card) for card in discard_pile]}")
     print(f"Discard pile values: {[card.cardvalue for card in discard_pile]}")
 
+    pygame.time.delay(700)
     # Automatically deal a new round if enough cards left
-    if deckcount >= 10:  # or another threshold if you want
+    if deckcount >= 10:
         deal_initial_cards_animated(deck)
 
 ##### BETTING #####
@@ -497,6 +529,7 @@ def bet_start():
         # Fill screen with background
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
+        screen.blit(card_deckpileblank, DISCARD_POS)
         
         # Render chips
         x = 60
@@ -618,6 +651,7 @@ def game_start():
         # Draw background
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
+        screen.blit(card_deckpileblank, DISCARD_POS)
         
         # Display player's cards
         for i, card in enumerate(player_hand):
@@ -634,7 +668,8 @@ def game_start():
         
         # Draw discard pile holder and count
         if has_discarded_once:
-            screen.blit(card_deck, DISCARD_POS)
+            if has_discarded_once_already:
+                screen.blit(card_deckpileblank, DISCARD_POS)
 
         # Update everything
         action_manager.update(1 / 60.0)
@@ -675,10 +710,11 @@ def main():
     titlecard = pygame.font.Font("font/KarenFat.ttf", 50)
 
     # Pre-load images using cache
-    global ground, titlecard_surface, card_deck
+    global ground, titlecard_surface, card_deck, card_deckpileblank
     ground = image_cache.get_image("graphics/ground.jpg")
     titlecard_surface = titlecard.render("BlackJack", False, "Black")
     card_deck = image_cache.get_image("graphics/Card_Deck/card_deck.png")
+    card_deckpileblank = image_cache.get_image("graphics/Card_Deck/card_deckpileblank.png")
 
     # Initialize pygame_gui
     global menu_manager
@@ -724,6 +760,7 @@ def main():
         # Draw all elements
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
+        screen.blit(card_deckpileblank, DISCARD_POS)
         screen.blit(titlecard_surface, (360, 185))
             
         # Update everything
