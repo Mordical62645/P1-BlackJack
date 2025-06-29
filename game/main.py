@@ -3,6 +3,7 @@ import sys
 import pygame
 import pygame_gui
 import random
+import math
 
 ##### CARD #####
 class Card:
@@ -31,6 +32,46 @@ class Chips:
     def __repr__(self):
         return f"{self.chipvalue}{self.chipcolor}"
 
+# Animation class for smooth card movements
+class CardAnimation:
+    def __init__(self, start_pos, end_pos, duration=0.5):
+        self.start_pos = start_pos
+        self.end_pos = end_pos
+        self.duration = duration
+        self.start_time = pygame.time.get_ticks()
+        self.completed = False
+        
+    def get_position(self, current_time):
+        elapsed = (current_time - self.start_time) / 1000.0
+        progress = min(elapsed / self.duration, 1.0)
+        
+        # Smooth easing function
+        progress = self.ease_out_quad(progress)
+        
+        x = self.start_pos[0] + (self.end_pos[0] - self.start_pos[0]) * progress
+        y = self.start_pos[1] + (self.end_pos[1] - self.start_pos[1]) * progress
+        
+        if progress >= 1.0:
+            self.completed = True
+            
+        return (x, y)
+    
+    def ease_out_quad(self, t):
+        return t * (2 - t)
+
+# Image cache for better performance
+class ImageCache:
+    def __init__(self):
+        self.cache = {}
+        
+    def get_image(self, path):
+        if path not in self.cache:
+            self.cache[path] = pygame.image.load(path)
+        return self.cache[path]
+
+# Global image cache
+image_cache = ImageCache()
+
 def deck_func():
     global deckvalues, deckcount
     values = list(range(2, 11)) + ["J", "Q", "K", "A"] # [2, 3, 4, 5, 6, 7, 8 , 9, 10, Jack, Queen, King, Ace] 
@@ -45,56 +86,48 @@ def deck_func():
     return deck
 
 def dealer_dealing_cards(dealertotal, playertotal):
-    captured_game_state = screen.copy()
-    screen.blit(captured_game_state, (0, 0))
-    captured_image = screen.copy()
-
-    blind_card_posx = 10
-    blind_card_posy = 10
-    
-    blind_card_targetx = 350
-    blind_card_targety = 50
-
-    frames = 30
+    global deckcount, dealer_card_targetx
     
     if dealertotal <= 16:
-
         while dealertotal <= 16:
             channel1.play(sound1)
 
-            global deckcount
             deckcount -= 1
             
-            captured_image = screen.copy()
             dealer_card = deck.pop()
             dealerscore.append(deckvalues.pop())
             dealer_hand.append(dealer_card)
             
             dealertotal = sum(dealerscore)
-
-            global dealer_card_targetx
             dealer_card_targetx += 100
 
-            for frame in range(frames):
-                    
-                # Calculate intermediate position
-                progress = frame / frames
-                blind_card_intermediate_x = blind_card_posx + (blind_card_targetx - blind_card_posx) * progress
-                blind_card_intermediate_y = blind_card_posy + (blind_card_targety - blind_card_posy) * progress
-
-                # Draw all elements
-                screen.blit(captured_image, (0, 0))            
-                
-                for _, card in enumerate(dealer_hand):
-                    card.load_image() 
-                    screen.blit(card.cardimage, (blind_card_intermediate_x, blind_card_intermediate_y))
-
-                channel2.play(sound2)
-                
-                pygame.display.update()
-                pygame.time.delay(10)
+            # Create smooth animation for dealer card
+            animation = CardAnimation((10, 10), (dealer_card_targetx, 50), 0.3)
+            current_time = pygame.time.get_ticks()
             
-            blind_card_targetx += 100
+            while not animation.completed:
+                current_time = pygame.time.get_ticks()
+                pos = animation.get_position(current_time)
+                
+                # Draw background
+                screen.blit(ground, (0, 0))
+                screen.blit(card_deck, (10, 10))
+                
+                # Draw existing dealer cards
+                for i, card in enumerate(dealer_hand[:-1]):
+                    card.load_image() 
+                    screen.blit(card.cardimage, (250 + i * 100, 50))
+                
+                # Draw animating card
+                screen.blit(blind_card, pos)
+                
+                # Draw player cards
+                for i, card in enumerate(player_hand):
+                    card.load_image() 
+                    screen.blit(card.cardimage, (250 + i * 100, 250))
+                
+                pygame.display.flip()
+                fps.tick(60)
 
             print()
             print(f"Deck: {deck}")
@@ -103,39 +136,95 @@ def dealer_dealing_cards(dealertotal, playertotal):
             print(f"Dealer's hand: {dealer_hand} Score: {dealertotal}")
             print(f"Player's hand: {player_hand} Score: {playertotal}")
 
-    pygame.time.delay(1000)
+    pygame.time.delay(500)
 
-    if len(dealer_hand) == 2 :
+    if len(dealer_hand) == 2:
         channel2.play(sound2) 
 
     return dealertotal, playertotal
     
-def deal_initial_cards(deck):
-    global player_hand, playertotal, playerscore, dealerscore, dealer_hand, dealertotal, deckvalues, deckcount
+def deal_initial_cards_animated(deck):
+    global player_hand, dealer_hand, playerscore, dealerscore, playertotal, dealertotal, deckvalues, deckcount, blind_card
+
     player_hand = []
-    playerscore = []
-
     dealer_hand = []
+    playerscore = []
     dealerscore = []
-    
-    for _ in range(2):
-        player_card = deck.pop()
-        playerscore.append(deckvalues.pop())
-        player_hand.append(player_card)
+
+    # Animation target positions
+    player_positions = [(250, 250), (350, 250)]
+    dealer_positions = [(250, 50), (350, 50)]
+    sequence = [
+        ('player', player_positions[0]),
+        ('dealer', dealer_positions[0]),
+        ('player', player_positions[1]),
+        ('dealer', dealer_positions[1]),
+    ]
+
+    blind_card = image_cache.get_image("graphics/Card_Back/blind_card.png")
+    drawing = "audio/sfx/drawing.mp3"
+    sound1 = pygame.mixer.Sound(drawing)
+    channel1 = pygame.mixer.Channel(0)
+    channel1.set_volume(0.5)
+
+    for idx, (who, pos) in enumerate(sequence):
+        card = deck.pop()
+        value = deckvalues.pop()
         deckcount -= 1
 
-        dealer_card = deck.pop()
-        dealerscore.append(deckvalues.pop())
-        dealer_hand.append(dealer_card)
-        deckcount -= 1
+        # Animate the card as a blind card
+        animation = CardAnimation((10, 10), pos, 0.4)
+        channel1.play(sound1)
+        while not animation.completed:
+            current_time = pygame.time.get_ticks()
+            anim_pos = animation.get_position(current_time)
+            screen.blit(ground, (0, 0))
+            screen.blit(card_deck, (10, 10))
+            # Draw all cards already dealt (not including the one being animated)
+            # For player
+            for i in range(len(player_hand)):
+                player_hand[i].load_image()
+                screen.blit(player_hand[i].cardimage, player_positions[i])
+            # For dealer
+            for i in range(len(dealer_hand)):
+                if i == 0:
+                    screen.blit(blind_card, dealer_positions[i])
+                else:
+                    dealer_hand[i].load_image()
+                    screen.blit(dealer_hand[i].cardimage, dealer_positions[i])
+            # Draw animating card (as blind card) on top
+            screen.blit(blind_card, anim_pos)
+            pygame.display.flip()
+            fps.tick(60)
 
-    playertotal = sum(playerscore) 
-    dealertotal = sum(dealerscore) 
+        # After animation, add the card to the hand and draw all cards in their correct places
+        if who == 'player':
+            player_hand.append(card)
+            playerscore.append(value)
+        else:
+            dealer_hand.append(card)
+            dealerscore.append(value)
+
+        screen.blit(ground, (0, 0))
+        screen.blit(card_deck, (10, 10))
+        for i, c in enumerate(player_hand):
+            c.load_image()
+            screen.blit(c.cardimage, player_positions[i])
+        for i, c in enumerate(dealer_hand):
+            if i == 0:
+                screen.blit(blind_card, dealer_positions[i])
+            else:
+                c.load_image()
+                screen.blit(c.cardimage, dealer_positions[i])
+        pygame.display.flip()
+        pygame.time.delay(100)  # Small pause for clarity
+
+    playertotal = sum(playerscore)
+    dealertotal = sum(dealerscore)
 
 ##### ACTION FUNCTIONS #####
 def Hit_func(dealertotal, playertotal):
-    global captured_image
-    captured_image = screen.copy()
+    global deckcount, hit_targetx, hit_targety
 
     player_card = deck.pop()
     playerscore.append(deckvalues.pop())
@@ -144,40 +233,41 @@ def Hit_func(dealertotal, playertotal):
     playertotal = sum(playerscore)
     dealertotal = sum(dealerscore)
 
-    global deckcount
     deckcount -= 1
-
     channel1.play(sound1)
 
-    global hit_targetx, hit_targety
-    hit_card_posx, hit_card_posy = 10, 10 
     hit_targetx += 100  
     hit_targety = 250 
 
-    global x, y
-    x = 300
-    y = 185
-
-    card_load_posx = 250
-    card_load_posy = 50
+    # Create smooth animation for hit card
+    animation = CardAnimation((10, 10), (hit_targetx, hit_targety), 0.4)
+    current_time = pygame.time.get_ticks()
     
-    frames = 30  
-    for frame in range(frames):
-            
-        # Calculate intermediate position
-        global intermediate_x, intermediate_y
-        intermediate_x = hit_card_posx + (hit_targetx - hit_card_posx) * (frame / frames)
-        intermediate_y = hit_card_posy + (hit_targety - hit_card_posy) * (frame / frames)
+    while not animation.completed:
+        current_time = pygame.time.get_ticks()
+        pos = animation.get_position(current_time)
 
-        # Draw all elements
+        # Draw background
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
-        screen.blit(captured_image, (0, 0))
-        screen.blit(blind_card, (intermediate_x, intermediate_y))
-        channel2.play(sound2)
         
-        pygame.display.update()
-        pygame.time.delay(10)
+        # Draw dealer cards
+        for i, card in enumerate(dealer_hand):
+            card.load_image() 
+            screen.blit(card.cardimage, (250 + i * 100, 50))
+            if i == 1:
+                screen.blit(blind_card, (250, 50))
+        
+        # Draw existing player cards
+        for i, card in enumerate(player_hand[:-1]):
+            card.load_image() 
+            screen.blit(card.cardimage, (250 + i * 100, 250))
+        
+        # Draw animating card
+        screen.blit(blind_card, pos)
+        
+        pygame.display.flip()
+        fps.tick(60)
 
     print()
     print(f"Deck: {deck}")
@@ -187,150 +277,130 @@ def Hit_func(dealertotal, playertotal):
 
     if playertotal > 21:        
         print("BUST!")
-        for _, card in enumerate(dealer_hand):
+        # Show all dealer cards
+        for i, card in enumerate(dealer_hand):
             card.load_image() 
-            screen.blit(card.cardimage, (card_load_posx, card_load_posy))
+            screen.blit(card.cardimage, (250 + i * 100, 50))
         
-        for _, card in enumerate(player_hand):
+        # Show all player cards
+        for i, card in enumerate(player_hand):
             card.load_image() 
-            screen.blit(card.cardimage, (intermediate_x, intermediate_y))
-            
-            global captured_game_state
-            captured_game_state = screen.copy() 
-            
-        titlecard_surface = titlecard.render("BUST!", False, "Black")
-        screen.blit(titlecard_surface, (x, y))
+            screen.blit(card.cardimage, (250 + i * 100, 250))
 
-        pygame.display.update()
-        pygame.time.delay(1000)
+        pygame.display.flip()
+        pygame.time.delay(2000)
         
-        dealer_dealing_cards(dealertotal, playertotal)
-        main()
+        return dealertotal, playertotal
+
+    return dealertotal, playertotal
 
 def Stand_func(dealertotal, playertotal):    
-    titlecard = pygame.font.Font("font/KarenFat.ttf", 50)
+    global deckcount, dealer_card_targetx
     
-    x = 300
-    y = 185
-
-    card_load_posx = 250
-    card_load_posy = 50
+    # Show dealer's hidden card
+    for i, card in enumerate(dealer_hand):
+        card.load_image() 
+        screen.blit(card.cardimage, (250 + i * 100, 50))
     
-    specific_card_index = 1  
-    specific_card = dealer_hand[specific_card_index]
-    specific_card.load_image()
-    screen.blit(specific_card.cardimage, (card_load_posx, card_load_posy)) 
-
-    dealer_dealing_cards(dealertotal, playertotal)
-
-    playertotal = sum(playerscore)
-    dealertotal = sum(dealerscore)
-
-    print(f"Dealer's hand: {dealer_hand} Score: {dealertotal}")
-    print(f"Player's hand: {player_hand} Score: {playertotal}")
-
-    # WIN CONDITION
-    if (playertotal <= 21 and (dealertotal > 21 or playertotal > dealertotal)):
-        # Player wins if they have a higher score than the dealer
-        print("WIN!")
-        titlecard_surface = titlecard.render("WIN!", False, "Black") 
-        screen.blit(titlecard_surface, (x, y))
-        pygame.display.update()  
-
-    # LOSE CONDITION 
-    elif (playertotal > 21 or (dealertotal <= 21 and dealertotal > playertotal)):
-        # Dealer wins if player busts or dealer has a higher score
-        print("BUST!")
-        titlecard_surface = titlecard.render("BUST!", False, "Black") 
-        screen.blit(titlecard_surface, (x, y))
-        pygame.display.update()
-
-    # PUSH CONDITION
-    elif playertotal == dealertotal:
+    pygame.display.flip()
+    pygame.time.delay(1000)
+    
+    # Dealer plays
+    dealertotal, playertotal = dealer_dealing_cards(dealertotal, playertotal)
+    
+    # Determine winner
+    if dealertotal > 21:
+        print("DEALER BUST! PLAYER WINS!")
+        titlecard_surface = titlecard.render("DEALER BUST! PLAYER WINS!", False, "Black") 
+        screen.blit(titlecard_surface, (200, 200))
+    elif dealertotal > playertotal:
+        print("DEALER WINS!")
+        titlecard_surface = titlecard.render("DEALER WINS!", False, "Black") 
+        screen.blit(titlecard_surface, (300, 200))
+    elif playertotal > dealertotal:
+        print("PLAYER WINS!")
+        titlecard_surface = titlecard.render("PLAYER WINS!", False, "Black") 
+        screen.blit(titlecard_surface, (300, 200))
+    else:
         print("PUSH!")
         titlecard_surface = titlecard.render("PUSH!", False, "Black") 
-        screen.blit(titlecard_surface, (x, y))
-        pygame.display.update()  
-
-    pygame.time.delay(1000)
-    main()
+        screen.blit(titlecard_surface, (350, 200))
+    
+    pygame.display.flip()
+    pygame.time.delay(3000)
+    
+    return dealertotal, playertotal
 
 def Surrender_func(dealertotal, playertotal):
-    titlecard = pygame.font.Font("font/KarenFat.ttf", 50)
-    
-    x = 250
-    y = 185
-
-    card_load_posx = 250
-    card_load_posy = 50
-    
-    specific_card_index = 1 
-    specific_card = dealer_hand[specific_card_index]
-    specific_card.load_image()
-    screen.blit(specific_card.cardimage, (card_load_posx, card_load_posy))  
-
-    dealer_dealing_cards(dealertotal, playertotal)
-
-    playertotal = sum(playerscore)
-    dealertotal = sum(dealerscore)
-
-    print(f"Dealer's hand: {dealer_hand} Score: {dealertotal}")
-    print(f"Player's hand: {player_hand} Score: {playertotal}")
-
-    print("SURRENDER!")
-    titlecard_surface = titlecard.render("SURRENDERED!", False, "Black") 
-    screen.blit(titlecard_surface, (x, y))
-    pygame.display.update()
-                    
-    pygame.time.delay(1000)
-    main()
+    print("PLAYER SURRENDERS!")
+    titlecard_surface = titlecard.render("PLAYER SURRENDERS!", False, "Black") 
+    screen.blit(titlecard_surface, (250, 200))
+    pygame.display.flip()
+    pygame.time.delay(2000)
+    return dealertotal, playertotal
 
 def Double_func():
+    print("Double Down!")
+    # Implement double down logic here
     pass
 
 def Split_func():
+    print("Split!")
+    # Implement split logic here
     pass
 
-##### ANIMATION FUNCTIONS #####
 def first_deal_anim():
-    # Create a new temporary screen for the animation
-    screen.blit(ground, (0, 0))
-    screen.blit(card_deck, (10, 10))
-
+    # Pre-load blind card image
+    global blind_card
+    blind_card = image_cache.get_image("graphics/Card_Back/blind_card.png")
+    
+    # Load sound
     global drawing, sound1, channel1
     drawing = "audio/sfx/drawing.mp3"
     sound1 = pygame.mixer.Sound(drawing)
     channel1 = pygame.mixer.Channel(0)
-    channel1.set_volume(10)  # Set the volume to 50%
+    channel1.set_volume(0.5)
+
+    # Define card positions for initial deal
+    card_positions = [
+        (250, 50),   # Dealer first card
+        (250, 250),  # Player first card
+        (350, 50),   # Dealer second card
+        (350, 250)   # Player second card
+    ]
     
-    global blind_card
-    blind_card = pygame.image.load(f"graphics/Card_Back/blind_card.png")
-
-    # Define initial positions and target positions for animations
-    blind_card_posx = 10
-    blind_card_posy = 10
-    blind_card_targetx = [150, 250, 250, 150]
-    blind_card_targety = [250, 50, 250, 50]
-
-    frames = 30
+    # Create animations for each card
+    animations = []
+    for i, target_pos in enumerate(card_positions):
+        animation = CardAnimation((10, 10), target_pos, 0.4)
+        animations.append(animation)
     
-    for i in range(len(blind_card_targetx)):
-        channel1.play(sound1)
-        captured_image = screen.copy()  
-
-        for frame in range(frames):
-            # Calculate the intermediate positions with smoother transition
-            progress = frame / frames
-            blind_card_intermediate_x = blind_card_posx + (blind_card_targetx[i] - blind_card_posx) * progress
-            blind_card_intermediate_y = blind_card_posy + (blind_card_targety[i] - blind_card_posy) * progress
-
-            screen.blit(captured_image, (0, 0))  # Blit the captured image
-            screen.blit(blind_card, (blind_card_intermediate_x, blind_card_intermediate_y))
+    # Play all animations simultaneously
+    start_time = pygame.time.get_ticks()
+    completed = [False] * len(animations)
+    
+    while not all(completed):
+        current_time = pygame.time.get_ticks()
+        
+        # Draw background
+        screen.blit(ground, (0, 0))
+        screen.blit(card_deck, (10, 10))
+        
+        # Update and draw each animation
+        for i, animation in enumerate(animations):
+            if not completed[i]:
+                pos = animation.get_position(current_time)
+                screen.blit(blind_card, pos)
+                completed[i] = animation.completed
+                
+                # Play sound for each card
+                if not completed[i] and animation.get_position(current_time)[0] > 100:
+                    channel1.play(sound1)
             
-            pygame.display.update()
-            pygame.time.delay(10) 
+        pygame.display.flip()
+        fps.tick(60)
     
-    print(f"{blind_card_targetx}:{blind_card_targety}")
+    print("Initial deal complete!")
 
 ##### BETTING #####
 def bet_start():
@@ -356,6 +426,7 @@ def bet_start():
     bet_100 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((500, 400), (50, 50)), text='100', manager=action_manager)
     bet_500 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((600, 400), (50, 50)), text='500', manager=action_manager)
     bet_1000 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((700, 400), (50, 50)), text='1000', manager=action_manager)
+    play = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((700, 50), (50, 50)), text='Play', manager=action_manager)
     
     while True:
         # Fill screen with background
@@ -379,36 +450,38 @@ def bet_start():
             if event.type == pygame.USEREVENT:
                 if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == bet_1:
-                        # Perform action
                         bet += 1
                         print(f"Bet: {bet}")
                     elif event.ui_element == bet_5:
-                        # Perform action
                         bet += 5
                         print(f"Bet: {bet}")
                     elif event.ui_element == bet_10:
-                        # Perform action
                         bet += 10
                         print(f"Bet: {bet}")
                     elif event.ui_element == bet_50:
-                        # Perform action
                         bet += 50
                         print(f"Bet: {bet}")
                     elif event.ui_element == bet_100:
-                        # Perform action
                         bet += 100
                         print(f"Bet: {bet}")
                     elif event.ui_element == bet_500:
-                        # Perform action
                         bet += 500
                         print(f"Bet: {bet}")
                     elif event.ui_element == bet_1000:
-                        # Perform action
                         bet += 1000
                         print(f"Bet: {bet}")
-                
-            # Update manager with the event
+                    elif event.ui_element == play:
+                        if bet <= 499:
+                            pygame.time.delay(1000)
+                            titlecard_surface = titlecard.render(f"Bet must be 500 above", False, "Black") 
+                            screen.blit(titlecard_surface, (150, 225))
+                        else:
+                            return bet
+                            
             action_manager.process_events(event)
+        
+        titlecard_surface = titlecard.render(f"Bet:{bet}", False, "Black") 
+        screen.blit(titlecard_surface, (300, 185))
 
         # Update the UI
         action_manager.update(1 / 60)  # Assuming a 60 FPS game loop
@@ -417,7 +490,7 @@ def bet_start():
         action_manager.draw_ui(screen)
         
         # Update display and control frame rate
-        pygame.display.update()
+        pygame.display.flip()
         fps.tick(60)
         
 ##### PLAY #####
@@ -432,7 +505,7 @@ def game_start():
     dealing = "audio/sfx/dealing.mp3"
     sound2 = pygame.mixer.Sound(dealing)
     channel2 = pygame.mixer.Channel(1)
-    channel2.set_volume(0.5)  # Set the volume to 50%
+    channel2.set_volume(0.5)
     channel2.play(sound2)
     
     global action_manager
@@ -477,49 +550,51 @@ def game_start():
 
             action_manager.process_events(event)
         
+        # Draw background
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
         
-        
         # Display player's cards
         for i, card in enumerate(player_hand):
-            card.load_image()  # Load the image if not loaded
-            screen.blit(card.cardimage, (50 + i * 100 + 100, 250))  # Adjust position as needed        
+            card.load_image()
+            screen.blit(card.cardimage, (250 + i * 100, 250))
 
         # Display dealer's cards
         for i, card in enumerate(dealer_hand):
             card.load_image()    
-            screen.blit(card.cardimage, (50 + i * 100 + 100, 50))  # Adjust position as needed
+            screen.blit(card.cardimage, (250 + i * 100, 50))
 
             if i == 1:
                 screen.blit(blind_card, (250, 50))
-        
-        #BLACKJACK INSTANT WIN
-        #if (playertotal == 21 and len(player_hand) == 2 and dealertotal != 21):  # Blackjack!
-            #print("BLACKJACK!")
-            #titlecard_surface = titlecard.render("BLACKJACK!", False, "Black") 
-            #resolution.blit(titlecard_surface, (x, y))
-            #pygame.display.update()  
 
         # Update everything
         action_manager.update(1 / 60.0)
         action_manager.draw_ui(screen)
 
-        pygame.display.update()
+        pygame.display.flip()
+        fps.tick(60)
               
 ##### MAIN #####
 def main():
     global hit_targetx, dealer_card_targetx
     hit_targetx = 250
     dealer_card_targetx = 250
+    
     # Initialize pygame
     pygame.init()
-    pygame.display.set_caption("BlackJack")
+    pygame.display.set_caption("BlackJack - Optimized")
 
     # Initialize music
     pygame.mixer.music.load("audio/bgm.mp3")
     pygame.mixer.music.set_volume(0.5)
     pygame.mixer.music.play()
+
+    # Initialize sound for card drawing (used in Hit, deal, etc)
+    global sound1, channel1
+    drawing = "audio/sfx/drawing.mp3"
+    sound1 = pygame.mixer.Sound(drawing)
+    channel1 = pygame.mixer.Channel(0)
+    channel1.set_volume(0.5)
 
     # Create screen
     global screen
@@ -530,14 +605,11 @@ def main():
     fps = pygame.time.Clock()
     titlecard = pygame.font.Font("font/KarenFat.ttf", 50)
 
-    # Surface
-    global ground, titlecard_surface
-    ground = pygame.image.load("graphics/ground.jpg")
+    # Pre-load images using cache
+    global ground, titlecard_surface, card_deck
+    ground = image_cache.get_image("graphics/ground.jpg")
     titlecard_surface = titlecard.render("BlackJack", False, "Black")
-
-    # Card Deck
-    global card_deck
-    card_deck = pygame.image.load("graphics/Card_Deck/card_deck.png")
+    card_deck = image_cache.get_image("graphics/Card_Deck/card_deck.png")
 
     # Initialize pygame_gui
     global menu_manager
@@ -546,7 +618,7 @@ def main():
     # Initialize game state
     global deck
     deck = deck_func()
-    deal_initial_cards(deck)
+    deal_initial_cards_animated(deck)
 
     print(f"Deck: {deck}")
     print(f"Stack: {deckcount}")
@@ -567,8 +639,8 @@ def main():
 
                     if event.ui_element == play_button:
                         print("Play button pressed")
-                        bet_start()
-                        first_deal_anim()
+                        bet = bet_start()
+                        deal_initial_cards_animated(deck)
                         game_start()
 
                     elif event.ui_element == info_button:
@@ -589,7 +661,7 @@ def main():
         menu_manager.update(1 / 60.0)
         menu_manager.draw_ui(screen)
 
-        pygame.display.update()
+        pygame.display.flip()
         fps.tick(60)
 
 if __name__ == "__main__":
