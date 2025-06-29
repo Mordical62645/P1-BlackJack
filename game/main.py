@@ -90,7 +90,7 @@ def dealer_dealing_cards(dealertotal, playertotal):
     
     if dealertotal <= 16:
         while dealertotal <= 16:
-            channel1.play(sound1)
+            channel1.play(drawing_sound)
 
             deckcount -= 1
             
@@ -144,7 +144,7 @@ def dealer_dealing_cards(dealertotal, playertotal):
     pygame.time.delay(500)
 
     if len(dealer_hand) == 2:
-        channel2.play(sound2) 
+        channel1.play(dealing_sound) 
 
     return dealertotal, playertotal
     
@@ -182,7 +182,7 @@ def deal_initial_cards_animated(deck):
 
         # Animate the card as a blind card
         animation = CardAnimation((10, 10), pos, 0.4)
-        channel1.play(sound1)
+        channel1.play(drawing_sound)
         while not animation.completed:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -219,7 +219,7 @@ def deal_initial_cards_animated(deck):
             dealerscore.append(value)
 
         # Play sound when blitting the card face after animation
-        channel1.play(sound1)
+        channel1.play(dealing_sound)
 
         screen.blit(ground, (0, 0))
         screen.blit(card_deck, (10, 10))
@@ -251,7 +251,7 @@ def Hit_func(dealertotal, playertotal):
     dealertotal = sum(dealerscore)
 
     deckcount -= 1
-    channel1.play(sound1)
+    channel1.play(drawing_sound)
 
     hit_targetx += 100  
     hit_targety = 250 
@@ -324,7 +324,7 @@ def Stand_func(dealertotal, playertotal):
         card.load_image()
         screen.blit(card.cardimage, (250 + i * 100, 50))
         if i == 0:
-            channel1.play(sound1)  # Play sound when revealing the hidden dealer card
+            channel1.play(dealing_sound)  # Play sound when revealing the hidden dealer card
     for i, card in enumerate(player_hand):
         card.load_image()
         screen.blit(card.cardimage, (250 + i * 100, 250))
@@ -387,64 +387,6 @@ def Split_func():
     print("Split!")
     # Implement split logic here
     pass
-
-def first_deal_anim():
-    # Pre-load blind card image
-    global blind_card
-    blind_card = image_cache.get_image("graphics/Card_Back/blind_card.png")
-    
-    # Load sound
-    global drawing, sound1, channel1
-    drawing = "audio/sfx/drawing.mp3"
-    sound1 = pygame.mixer.Sound(drawing)
-    channel1 = pygame.mixer.Channel(0)
-    channel1.set_volume(0.5)
-
-    # Define card positions for initial deal
-    card_positions = [
-        (250, 50),   # Dealer first card
-        (250, 250),  # Player first card
-        (350, 50),   # Dealer second card
-        (350, 250)   # Player second card
-    ]
-    
-    # Create animations for each card
-    animations = []
-    for i, target_pos in enumerate(card_positions):
-        animation = CardAnimation((10, 10), target_pos, 0.4)
-        animations.append(animation)
-    
-    # Play all animations simultaneously
-    start_time = pygame.time.get_ticks()
-    completed = [False] * len(animations)
-    
-    while not all(completed):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-        current_time = pygame.time.get_ticks()
-        
-        # Draw background
-        screen.blit(ground, (0, 0))
-        screen.blit(card_deck, (10, 10))
-        screen.blit(card_deckpileblank, DISCARD_POS)
-        
-        # Update and draw each animation
-        for i, animation in enumerate(animations):
-            if not completed[i]:
-                pos = animation.get_position(current_time)
-                screen.blit(blind_card, pos)
-                completed[i] = animation.completed
-                
-                # Play sound for each card
-                if not completed[i] and animation.get_position(current_time)[0] > 100:
-                    channel1.play(sound1)
-            
-        pygame.display.flip()
-        fps.tick(60)
-    
-    print("Initial deal complete!")
 
 # Add global discard pile and position
 discard_pile = []
@@ -702,9 +644,9 @@ def main():
     pygame.mixer.music.play()
 
     # Initialize sound for card drawing (used in Hit, deal, etc)
-    global sound1, channel1
-    drawing = "audio/sfx/drawing.mp3"
-    sound1 = pygame.mixer.Sound(drawing)
+    global drawing_sound, dealing_sound, channel1
+    drawing_sound = pygame.mixer.Sound("audio/sfx/drawing.mp3")
+    dealing_sound = pygame.mixer.Sound("audio/sfx/dealing.mp3")
     channel1 = pygame.mixer.Channel(0)
     channel1.set_volume(0.5)
 
